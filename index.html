@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sounds</title>
+<style>
+  :root {
+    --bg: #000;
+    --panel: #111;
+    --line: #222;
+    --text: #fff;
+    --muted: #8a8a8a;
+    --accent: #ff7a3d;
+    --accent-ink: #1a0d05;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: clamp(40px, 10vw, 96px) 16px 160px;
+  }
+  header { margin-bottom: 40px; }
+  h1 {
+    margin: 0;
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    font-weight: 400;
+    font-size: clamp(3rem, 14vw, 6rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+  }
+  .tagline { margin: 16px 0 0; color: var(--muted); }
+
+  ol { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  li { border-bottom: 1px solid var(--line); }
+  .track {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 18px 8px;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .track:hover { background: var(--panel); }
+  .track:focus-visible, .ctl:focus-visible, input[type=range]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .num { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .name { font-size: 1.125rem; overflow-wrap: anywhere; }
+  .dur { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.875rem; }
+  li.current .name, li.current .num { color: var(--accent); }
+  li.empty .track { cursor: default; color: var(--muted); }
+  li.empty .track:hover { background: none; }
+  li.empty .name { font-style: italic; }
+
+  .player {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .player[hidden] { display: none; }
+  .player-inner { max-width: 680px; margin: 0 auto; }
+  .now { font-size: 0.9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .ctl {
+    flex: none; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: none; border: 0; color: var(--text); cursor: pointer;
+  }
+  .ctl:hover { background: var(--line); }
+  .ctl.play { background: var(--accent); color: var(--accent-ink); width: 48px; height: 48px; }
+  .ctl.play:hover { filter: brightness(1.1); }
+  .ctl svg { width: 20px; height: 20px; fill: currentColor; }
+  .time { flex: none; font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.6em; }
+  .time.end { text-align: right; }
+  input[type=range] {
+    flex: 1; min-width: 0; height: 24px; margin: 0;
+    accent-color: var(--accent); cursor: pointer; background: transparent;
+  }
+  @media (max-width: 480px) {
+    .row { gap: 6px; }
+    .time { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Sounds</h1>
+    <p class="tagline" id="tagline"></p>
+  </header>
+  <ol id="list"></ol>
+</main>
+
+<div class="player" id="player" hidden>
+  <div class="player-inner">
+    <div class="now" id="now" aria-live="polite"></div>
+    <div class="row">
+      <button class="ctl" id="prev" aria-label="Previous song"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="ctl play" id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z"/></svg></button>
+      <button class="ctl" id="next" aria-label="Next song"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <span class="time" id="cur">0:00</span>
+      <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek">
+      <span class="time end" id="total">0:00</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLOTS = 7;
+const $ = (id) => document.getElementById(id);
+const audio = new Audio();
+audio.preload = 'metadata';
+let songs = [];
+let current = -1;
+let seeking = false;
+
+const fmt = (s) => {
+  if (!isFinite(s)) return '–:––';
+  s = Math.floor(s);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+};
+
+function render() {
+  const list = $('list');
+  list.textContent = '';
+  const rows = Math.max(songs.length, SLOTS);
+  for (let i = 0; i < rows; i++) {
+    const song = songs[i];
+    const li = document.createElement('li');
+    const btn = document.createElement(song ? 'button' : 'div');
+    btn.className = 'track';
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(i + 1).padStart(2, '0');
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = song ? song.title : '—';
+    const dur = document.createElement('span');
+    dur.className = 'dur';
+    btn.append(num, name, dur);
+    if (song) {
+      btn.addEventListener('click', () => (i === current ? toggle() : play(i)));
+      // Read the duration without downloading the whole file.
+      const probe = new Audio();
+      probe.preload = 'metadata';
+      probe.addEventListener('loadedmetadata', () => { dur.textContent = fmt(probe.duration); probe.src = ''; }, { once: true });
+      probe.src = song.src;
+    } else {
+      li.className = 'empty';
+    }
+    li.append(btn);
+    list.append(li);
+  }
+}
+
+function mark() {
+  [...$('list').children].forEach((li, i) => {
+    li.classList.toggle('current', i === current);
+    const b = li.firstElementChild;
+    if (b.tagName === 'BUTTON') b.setAttribute('aria-current', i === current ? 'true' : 'false');
+  });
+}
+
+function play(i) {
+  if (!songs.length) return;
+  current = (i + songs.length) % songs.length;
+  const song = songs[current];
+  audio.src = song.src;
+  audio.play().catch(() => {});
+  $('player').hidden = false;
+  $('now').textContent = song.title;
+  mark();
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: song.title, artist: $('title').textContent });
+  }
+}
+
+function toggle() {
+  if (current < 0) return play(0);
+  audio.paused ? audio.play().catch(() => {}) : audio.pause();
+}
+
+function syncIcon() {
+  const playing = !audio.paused;
+  $('playIcon').setAttribute('d', playing ? 'M6 4h4v16H6zM14 4h4v16h-4z' : 'M7 4v16l13-8z');
+  $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+}
+
+audio.addEventListener('play', syncIcon);
+audio.addEventListener('pause', syncIcon);
+audio.addEventListener('loadedmetadata', () => { $('total').textContent = fmt(audio.duration); });
+audio.addEventListener('timeupdate', () => {
+  $('cur').textContent = fmt(audio.currentTime);
+  if (!seeking && isFinite(audio.duration) && audio.duration > 0) {
+    $('seek').value = (audio.currentTime / audio.duration) * 1000;
+  }
+});
+audio.addEventListener('ended', () => {
+  if (current < songs.length - 1) play(current + 1);
+});
+audio.addEventListener('error', () => {
+  if (current >= 0) $('now').textContent = songs[current].title + ' — could not be played';
+});
+
+$('play').addEventListener('click', toggle);
+$('prev').addEventListener('click', () => (audio.currentTime > 3 ? (audio.currentTime = 0) : play(current - 1)));
+$('next').addEventListener('click', () => play(current + 1));
+$('seek').addEventListener('input', () => {
+  seeking = true;
+  if (isFinite(audio.duration)) $('cur').textContent = fmt(($('seek').value / 1000) * audio.duration);
+});
+$('seek').addEventListener('change', () => {
+  if (isFinite(audio.duration)) audio.currentTime = ($('seek').value / 1000) * audio.duration;
+  seeking = false;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || e.target.closest('button, input, a')) return;
+  e.preventDefault();
+  toggle();
+});
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('previoustrack', () => play(current - 1));
+  navigator.mediaSession.setActionHandler('nexttrack', () => play(current + 1));
+}
+
+fetch('songs.json', { cache: 'no-cache' })
+  .then((r) => (r.ok ? r.json() : {}))
+  .catch(() => ({}))
+  .then((data) => {
+    if (data.title) { $('title').textContent = data.title; document.title = data.title; }
+    if (data.tagline) $('tagline').textContent = data.tagline;
+    songs = data.songs || [];
+    render();
+  });
+</script>
+</body>
+</html>
