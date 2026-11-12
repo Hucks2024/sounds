@@ -6,13 +6,13 @@
 <title>Sounds</title>
 <style>
   :root {
-    --bg: #000;
-    --panel: #111;
-    --line: #222;
-    --text: #fff;
-    --muted: #8a8a8a;
-    --accent: #ff7a3d;
-    --accent-ink: #1a0d05;
+    --bg: #fff;
+    --panel: #f2f2f2;
+    --line: #e0e0e0;
+    --text: #000;
+    --muted: #6b6b6b;
+    --accent: #d9480f;
+    --accent-ink: #fff;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -26,19 +26,8 @@
   main {
     max-width: 680px;
     margin: 0 auto;
-    padding: clamp(40px, 10vw, 96px) 16px 160px;
+    padding: clamp(24px, 6vw, 64px) 16px 160px;
   }
-  header { margin-bottom: 40px; }
-  h1 {
-    margin: 0;
-    font-family: ui-serif, Georgia, "Times New Roman", serif;
-    font-weight: 400;
-    font-size: clamp(3rem, 14vw, 6rem);
-    line-height: 0.95;
-    letter-spacing: -0.03em;
-  }
-  .tagline { margin: 16px 0 0; color: var(--muted); }
-
   ol { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
   li { border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 4px; }
   .dl {
@@ -110,10 +99,6 @@
 </head>
 <body>
 <main>
-  <header>
-    <h1 id="title">Sounds</h1>
-    <p class="tagline" id="tagline"></p>
-  </header>
   <ol id="list"></ol>
 </main>
 
@@ -215,7 +200,7 @@ function play(i) {
   $('now').textContent = song.title;
   mark();
   if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: song.title, artist: $('title').textContent });
+    navigator.mediaSession.metadata = new MediaMetadata({ title: song.title, artist: document.title });
   }
 }
 
@@ -272,8 +257,7 @@ fetch('songs.json', { cache: 'no-cache' })
   .then((r) => (r.ok ? r.json() : {}))
   .catch(() => ({}))
   .then((data) => {
-    if (data.title) { $('title').textContent = data.title; document.title = data.title; }
-    if (data.tagline) $('tagline').textContent = data.tagline;
+    if (data.title) document.title = data.title;
     songs = data.songs || [];
     render();
     if (songs.length) {
