@@ -1,4 +1,4 @@
-# Sounds
+# ya boi Sammy
 
 A one-page music site. Songs live in the `songs/` folder; the site rebuilds itself every time you add one.
 
