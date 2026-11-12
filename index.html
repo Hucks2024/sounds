@@ -50,7 +50,7 @@
   .dl svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .track {
     display: grid;
-    grid-template-columns: 2.5rem 1fr auto;
+    grid-template-columns: 1.5rem 2rem 1fr auto;
     align-items: center;
     gap: 8px;
     flex: 1; min-width: 0;
@@ -67,6 +67,7 @@
   .track:focus-visible, .ctl:focus-visible, input[type=range]:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
+  .ico { width: 18px; height: 18px; fill: currentColor; display: block; }
   .num { color: var(--muted); font-variant-numeric: tabular-nums; }
   .name { font-size: 1.125rem; overflow-wrap: anywhere; }
   .dur { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.875rem; }
@@ -132,6 +133,8 @@
 
 <script>
 const SLOTS = 7;
+const PLAY = 'M7 4v16l13-8z';
+const PAUSE = 'M6 4h4v16H6zM14 4h4v16h-4z';
 const $ = (id) => document.getElementById(id);
 const audio = new Audio();
 audio.preload = 'metadata';
@@ -154,6 +157,8 @@ function render() {
     const li = document.createElement('li');
     const btn = document.createElement(song ? 'button' : 'div');
     btn.className = 'track';
+    const ico = document.createElement('span');
+    if (song) ico.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="' + PLAY + '"/></svg>';
     const num = document.createElement('span');
     num.className = 'num';
     num.textContent = String(i + 1).padStart(2, '0');
@@ -162,7 +167,7 @@ function render() {
     name.textContent = song ? song.title : '—';
     const dur = document.createElement('span');
     dur.className = 'dur';
-    btn.append(num, name, dur);
+    btn.append(ico, num, name, dur);
     if (song) {
       btn.addEventListener('click', () => (i === current ? toggle() : play(i)));
       // Read the duration without downloading the whole file.
@@ -192,7 +197,11 @@ function mark() {
   [...$('list').children].forEach((li, i) => {
     li.classList.toggle('current', i === current);
     const b = li.firstElementChild;
-    if (b.tagName === 'BUTTON') b.setAttribute('aria-current', i === current ? 'true' : 'false');
+    if (b.tagName !== 'BUTTON') return;
+    const on = i === current && !audio.paused;
+    b.setAttribute('aria-current', i === current ? 'true' : 'false');
+    b.setAttribute('aria-label', (on ? 'Pause ' : 'Play ') + songs[i].title);
+    b.querySelector('.ico path').setAttribute('d', on ? PAUSE : PLAY);
   });
 }
 
@@ -217,8 +226,9 @@ function toggle() {
 
 function syncIcon() {
   const playing = !audio.paused;
-  $('playIcon').setAttribute('d', playing ? 'M6 4h4v16H6zM14 4h4v16h-4z' : 'M7 4v16l13-8z');
+  $('playIcon').setAttribute('d', playing ? PAUSE : PLAY);
   $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  mark();
 }
 
 audio.addEventListener('play', syncIcon);
@@ -238,7 +248,7 @@ audio.addEventListener('error', () => {
 });
 
 $('play').addEventListener('click', toggle);
-$('prev').addEventListener('click', () => (audio.currentTime > 3 ? (audio.currentTime = 0) : play(current - 1)));
+$('prev').addEventListener('click', () => (audio.currentTime > 3 ? (audio.currentTime = 0) : play(Math.max(current, 0) - 1)));
 $('next').addEventListener('click', () => play(current + 1));
 $('seek').addEventListener('input', () => {
   seeking = true;
@@ -266,6 +276,11 @@ fetch('songs.json', { cache: 'no-cache' })
     if (data.tagline) $('tagline').textContent = data.tagline;
     songs = data.songs || [];
     render();
+    if (songs.length) {
+      $('player').hidden = false;
+      $('now').textContent = songs[0].title;
+      mark();
+    }
   });
 </script>
 </body>
