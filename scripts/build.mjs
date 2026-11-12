@@ -20,6 +20,7 @@ const files = readdirSync('songs')
 const site = JSON.parse(readFileSync('site.json', 'utf8'));
 const songs = files.map((file) => ({
   title: titleFrom(file),
+  file: file.replace(/^\s*\d+\s*[-._)\s]\s*/, ''),
   src: 'songs/' + encodeURIComponent(file),
 }));
 
