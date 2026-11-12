@@ -190,9 +190,35 @@ function mark() {
   });
 }
 
-function play(i) {
+// Shuffle: every song plays once in random order, then the deck is reshuffled, forever.
+let queue = [];
+const history = [];
+
+function nextShuffled() {
+  if (!queue.length) {
+    queue = songs.map((_, i) => i);
+    for (let i = queue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+    // Don't start a new round with the song that just finished.
+    if (queue.length > 1 && queue[0] === current) queue.push(queue.shift());
+  }
+  return queue.shift();
+}
+
+function playNext() { if (songs.length) play(nextShuffled()); }
+
+function playPrev() {
+  if (audio.currentTime > 3 || !history.length) { audio.currentTime = 0; return; }
+  play(history.pop(), true);
+}
+
+function play(i, back) {
   if (!songs.length) return;
-  current = (i + songs.length) % songs.length;
+  if (current >= 0 && !back) history.push(current);
+  current = i;
+  queue = queue.filter((q) => q !== i);
   const song = songs[current];
   audio.src = song.src;
   audio.play().catch(() => {});
@@ -205,7 +231,7 @@ function play(i) {
 }
 
 function toggle() {
-  if (current < 0) return play(0);
+  if (current < 0) return playNext();
   audio.paused ? audio.play().catch(() => {}) : audio.pause();
 }
 
@@ -226,15 +252,15 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 audio.addEventListener('ended', () => {
-  if (current < songs.length - 1) play(current + 1);
+  playNext();
 });
 audio.addEventListener('error', () => {
   if (current >= 0) $('now').textContent = songs[current].title + ' — could not be played';
 });
 
 $('play').addEventListener('click', toggle);
-$('prev').addEventListener('click', () => (audio.currentTime > 3 ? (audio.currentTime = 0) : play(Math.max(current, 0) - 1)));
-$('next').addEventListener('click', () => play(current + 1));
+$('prev').addEventListener('click', playPrev);
+$('next').addEventListener('click', playNext);
 $('seek').addEventListener('input', () => {
   seeking = true;
   if (isFinite(audio.duration)) $('cur').textContent = fmt(($('seek').value / 1000) * audio.duration);
@@ -249,8 +275,8 @@ document.addEventListener('keydown', (e) => {
   toggle();
 });
 if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('previoustrack', () => play(current - 1));
-  navigator.mediaSession.setActionHandler('nexttrack', () => play(current + 1));
+  navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+  navigator.mediaSession.setActionHandler('nexttrack', playNext);
 }
 
 fetch('songs.json', { cache: 'no-cache' })
@@ -262,7 +288,7 @@ fetch('songs.json', { cache: 'no-cache' })
     render();
     if (songs.length) {
       $('player').hidden = false;
-      $('now').textContent = songs[0].title;
+      $('now').textContent = 'Shuffle';
       mark();
     }
   });
